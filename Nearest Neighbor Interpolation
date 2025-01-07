@@ -15,7 +15,7 @@ using namespace std;
  */
 void nearestNeighborInterpolation(const Mat& src, Mat& dst, int ow, int oh)
 {
-    // 计算缩放比例（注意：此处与部分描述相反，x 向右，y 向下）
+    // 计算缩放比例（x 向右，y 向下）
     double scale_width  = static_cast<double>(src.cols) / static_cast<double>(ow);
     double scale_height = static_cast<double>(src.rows) / static_cast<double>(oh);
 
