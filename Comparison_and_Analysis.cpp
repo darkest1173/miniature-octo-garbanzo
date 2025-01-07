@@ -181,11 +181,11 @@ Mat opencvResize(const Mat& input_image, int output_width, int output_height) {
 }
 
 /**
- * @brief 示例主函数，比较自实现的多线程最近邻缩放与OpenCV的性能
+ * @brief 主函数，测试并比较自实现的多线程最近邻缩放与OpenCV的性能
  */
 int main(int argc, char** argv) {
     // 检查命令行参数
-    if (argc != 5) {
+    if (argc < 5) {
         cout << "使用方法: " << argv[0] << " <输入图像路径> <自定义输出图像路径> <输出宽度> <输出高度>" << endl;
         return -1;
     }
@@ -206,54 +206,66 @@ int main(int argc, char** argv) {
     cout << "输入图像尺寸: " << input_img.cols << "x" << input_img.rows << endl;
     cout << "图像通道数: " << input_img.channels() << endl;
 
+    // 定义测试参数
+    struct TestCase {
+        string name;
+        int output_width;
+        int output_height;
+    };
+
+    vector<TestCase> test_cases = {
+        {"Test1_Upscale", input_img.cols * 2, input_img.rows * 2},
+        {"Test2_Downscale", input_img.cols / 2, input_img.rows / 2},
+        {"Test3_AspectRatioChange", input_img.cols * 3 / 4, input_img.rows * 5 / 4}
+    };
+
     // 测试次数以获得平均值
     int test_iterations = 10;
 
-    // 测试自实现的多线程最近邻缩放
-    auto start_custom = high_resolution_clock::now();
-    Mat resized_img_custom;
-    for (int i = 0; i < test_iterations; ++i) {
-        resized_img_custom = nearestNeighborResizeParallel(input_img, new_width, new_height);
+    // 循环测试不同的缩放因子
+    for (const auto& test : test_cases) {
+        cout << "\n=== " << test.name << " ===" << endl;
+        cout << "输出尺寸: " << test.output_width << "x" << test.output_height << endl;
+
+        // 测试自实现的多线程最近邻缩放
+        auto start_custom = high_resolution_clock::now();
+        Mat resized_img_custom;
+        for (int i = 0; i < test_iterations; ++i) {
+            resized_img_custom = nearestNeighborResizeParallel(input_img, test.output_width, test.output_height);
+        }
+        auto end_custom = high_resolution_clock::now();
+        auto duration_custom = duration_cast<milliseconds>(end_custom - start_custom).count();
+        double avg_time_custom = static_cast<double>(duration_custom) / test_iterations;
+
+        // 测试 OpenCV 的 resize
+        auto start_opencv = high_resolution_clock::now();
+        Mat resized_img_opencv;
+        for (int i = 0; i < test_iterations; ++i) {
+            resized_img_opencv = opencvResize(input_img, test.output_width, test.output_height);
+        }
+        auto end_opencv = high_resolution_clock::now();
+        auto duration_opencv = duration_cast<milliseconds>(end_opencv - start_opencv).count();
+        double avg_time_opencv = static_cast<double>(duration_opencv) / test_iterations;
+
+        // 保存缩放后的图像
+        string custom_output = "custom_" + test.name + ".jpg";
+        bool success_custom = imwrite(custom_output, resized_img_custom);
+        if (!success_custom) {
+            cout << "无法保存自定义缩放图像到: " << custom_output << endl;
+            // 继续
+        }
+
+        string opencv_output = "opencv_" + test.name + ".jpg";
+        bool success_opencv = imwrite(opencv_output, resized_img_opencv);
+        if (!success_opencv) {
+            cout << "无法保存 OpenCV 缩放图像到: " << opencv_output << endl;
+            // 继续
+        }
+
+        // 输出比较结果
+        cout << "自实现多线程最近邻缩放平均时间: " << avg_time_custom << " ms" << endl;
+        cout << "OpenCV 最近邻缩放平均时间: " << avg_time_opencv << " ms" << endl;
     }
-    auto end_custom = high_resolution_clock::now();
-    auto duration_custom = duration_cast<milliseconds>(end_custom - start_custom).count();
-    double avg_time_custom = static_cast<double>(duration_custom) / test_iterations;
-
-    // 测试 OpenCV 的 resize
-    auto start_opencv = high_resolution_clock::now();
-    Mat resized_img_opencv;
-    for (int i = 0; i < test_iterations; ++i) {
-        resized_img_opencv = opencvResize(input_img, new_width, new_height);
-    }
-    auto end_opencv = high_resolution_clock::now();
-    auto duration_opencv = duration_cast<milliseconds>(end_opencv - start_opencv).count();
-    double avg_time_opencv = static_cast<double>(duration_opencv) / test_iterations;
-
-    // 保存缩放后的图像
-    bool success_custom = imwrite(output_path_custom, resized_img_custom);
-    if (!success_custom) {
-        cout << "无法保存自定义缩放图像到: " << output_path_custom << endl;
-        // 继续
-    }
-
-    string output_path_opencv = "opencv_" + output_path_custom;
-    bool success_opencv = imwrite(output_path_opencv, resized_img_opencv);
-    if (!success_opencv) {
-        cout << "无法保存 OpenCV 缩放图像到: " << output_path_opencv << endl;
-        // 继续
-    }
-
-    // 输出比较结果
-    cout << "自实现多线程最近邻缩放平均时间: " << avg_time_custom << " ms" << endl;
-    cout << "OpenCV 最近邻缩放平均时间: " << avg_time_opencv << " ms" << endl;
-
-    // 可选：显示原始和缩放后的图像
-    /*
-    imshow("原始图像", input_img);
-    imshow("自定义缩放图像", resized_img_custom);
-    imshow("OpenCV 缩放图像", resized_img_opencv);
-    waitKey(0);
-    */
 
     return 0;
 }
