@@ -22,24 +22,27 @@ OpenCV 内置函数的性能对比分析。
 
 2.1基本最近邻实现
 
-bash
+
+```bash
 g++ nearest_neighbor_basic.cpp -o nearest_neighbor_basic `pkg-config --cflags --libs opencv4`
+```
 
 多通道支持
 
-bash
+```bash
 g++ nearest_neighbor_multichannel.cpp -o nearest_neighbor_multichannel `pkg-config --cflags --libs opencv4`
+```
 
 任意缩放因子
 
-bash
+```bash
 g++ nearest_neighbor_arbitrary.cpp -o nearest_neighbor_arbitrary `pkg-config --cflags --libs opencv4`
-
+```
 多线程优化与性能对比
 
-bash
+```bash
 g++ performance_comparison.cpp -o performance_comparison `pkg-config --cflags --libs opencv4`
-
+```
 双线性插值
 bash
 ```
