@@ -1,9 +1,10 @@
-#include <opencv2/opencv.hpp>
-#include <opencv2/core/parallel/parallel_for_.hpp>
-#include <iostream>
-#include <cmath>
 #include <chrono>
+#include <cmath>
+#include <iostream>
+#include <opencv2/opencv.hpp>
 #include <vector>
+#include "opencv2/core/parallel/parallel_backend.hpp"
+
 
 using namespace cv;
 using namespace std;
@@ -11,7 +12,7 @@ using namespace std::chrono;
 
 /**
  * @brief 计算图像的宽度和高度缩放因子
- * 
+ *
  * @param input_width 输入图像的宽度
  * @param input_height 输入图像的高度
  * @param output_width 输出图像的宽度
@@ -19,14 +20,15 @@ using namespace std::chrono;
  * @param scale_width 输出图像宽度的缩放因子
  * @param scale_height 输出图像高度的缩放因子
  */
-void calculateScalingFactors(int input_width, int input_height, int output_width, int output_height, double &scale_width, double &scale_height) {
+void calculateScalingFactors(int input_width, int input_height, int output_width, int output_height,
+                             double &scale_width, double &scale_height) {
     scale_width = static_cast<double>(input_width) / output_width;
     scale_height = static_cast<double>(input_height) / output_height;
 }
 
 /**
  * @brief 根据输出图像的坐标，通过缩放因子找到输入图像中最近的像素坐标
- * 
+ *
  * @param x_dst 输出图像中的x坐标
  * @param y_dst 输出图像中的y坐标
  * @param scale_width 宽度缩放因子
@@ -37,17 +39,17 @@ pair<int, int> getNearestNeighborCoordinates(int x_dst, int y_dst, double scale_
     // 计算输入图像中的对应浮点坐标
     double x_src_f = x_dst * scale_width;
     double y_src_f = y_dst * scale_height;
-    
+
     // 四舍五入到最近的整数坐标
     int x_src = static_cast<int>(round(x_src_f));
     int y_src = static_cast<int>(round(y_src_f));
-    
+
     return {x_src, y_src};
 }
 
 /**
  * @brief 将坐标限制在输入图像的有效范围内
- * 
+ *
  * @param x_src 输入图像中的x坐标
  * @param y_src 输入图像中的y坐标
  * @param input_width 输入图像的宽度
@@ -62,7 +64,7 @@ pair<int, int> clampCoordinates(int x_src, int y_src, int input_width, int input
 
 /**
  * @brief 将输入图像中的像素值赋给输出图像，支持单通道和三通道
- * 
+ *
  * @param input_image 输入图像
  * @param output_image 输出图像
  * @param x_dst 输出图像中的x坐标
@@ -70,7 +72,7 @@ pair<int, int> clampCoordinates(int x_src, int y_src, int input_width, int input
  * @param x_src 输入图像中的x坐标
  * @param y_src 输入图像中的y坐标
  */
-void assignPixelOptimized(const Mat& input_image, Mat& output_image, int x_dst, int y_dst, int x_src, int y_src) {
+void assignPixelOptimized(const Mat &input_image, Mat &output_image, int x_dst, int y_dst, int x_src, int y_src) {
     int channels = input_image.channels();
     if (channels == 1) {
         // 单通道（灰度图像）
@@ -88,8 +90,8 @@ void assignPixelOptimized(const Mat& input_image, Mat& output_image, int x_dst, 
  * @brief 定义一个并行任务，用于在多线程环境下进行图像缩放
  */
 struct ResizeTask : public ParallelLoopBody {
-    const Mat& input_image;
-    Mat& output_image;
+    const Mat &input_image;
+    Mat &output_image;
     double scale_width;
     double scale_height;
     int output_height;
@@ -97,7 +99,7 @@ struct ResizeTask : public ParallelLoopBody {
 
     /**
      * @brief 构造函数
-     * 
+     *
      * @param in 输入图像
      * @param out 输出图像
      * @param sw 宽度缩放因子
@@ -105,15 +107,15 @@ struct ResizeTask : public ParallelLoopBody {
      * @param oh 输出图像高度
      * @param ow 输出图像宽度
      */
-    ResizeTask(const Mat& in, Mat& out, double sw, double sh, int oh, int ow)
-        : input_image(in), output_image(out), scale_width(sw), scale_height(sh), output_height(oh), output_width(ow) {}
+    ResizeTask(const Mat &in, Mat &out, double sw, double sh, int oh, int ow) :
+        input_image(in), output_image(out), scale_width(sw), scale_height(sh), output_height(oh), output_width(ow) {}
 
     /**
      * @brief 重载运算符，用于并行处理指定范围的行
-     * 
+     *
      * @param range 需要处理的行范围
      */
-    virtual void operator()(const Range& range) const CV_OVERRIDE {
+    virtual void operator()(const Range &range) const CV_OVERRIDE {
         for (int y_dst = range.start; y_dst < range.end; ++y_dst) {
             for (int x_dst = 0; x_dst < output_width; ++x_dst) {
                 // 反向映射到输入图像坐标
@@ -135,13 +137,13 @@ struct ResizeTask : public ParallelLoopBody {
 
 /**
  * @brief 使用最近邻插值算法对图像进行缩放，支持多线程处理以优化性能
- * 
+ *
  * @param input_image 输入的原始图像
  * @param output_width 期望的输出图像宽度
  * @param output_height 期望的输出图像高度
  * @return Mat 缩放后的图像
  */
-Mat nearestNeighborResizeParallel(const Mat& input_image, int output_width, int output_height) {
+Mat nearestNeighborResizeParallel(const Mat &input_image, int output_width, int output_height) {
     int input_width = input_image.cols;
     int input_height = input_image.rows;
 
@@ -168,13 +170,13 @@ Mat nearestNeighborResizeParallel(const Mat& input_image, int output_width, int 
 
 /**
  * @brief 使用OpenCV的resize函数进行最近邻插值缩放
- * 
+ *
  * @param input_image 输入的原始图像
  * @param output_width 期望的输出图像宽度
  * @param output_height 期望的输出图像高度
  * @return Mat 缩放后的图像
  */
-Mat opencvResize(const Mat& input_image, int output_width, int output_height) {
+Mat opencvResize(const Mat &input_image, int output_width, int output_height) {
     Mat resized_image;
     resize(input_image, resized_image, Size(output_width, output_height), 0, 0, INTER_NEAREST);
     return resized_image;
@@ -183,7 +185,7 @@ Mat opencvResize(const Mat& input_image, int output_width, int output_height) {
 /**
  * @brief 主函数，测试并比较自实现的多线程最近邻缩放与OpenCV的性能
  */
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     // 检查命令行参数
     if (argc < 5) {
         cout << "使用方法: " << argv[0] << " <输入图像路径> <自定义输出图像路径> <输出宽度> <输出高度>" << endl;
@@ -213,17 +215,15 @@ int main(int argc, char** argv) {
         int output_height;
     };
 
-    vector<TestCase> test_cases = {
-        {"Test1_Upscale", input_img.cols * 2, input_img.rows * 2},
-        {"Test2_Downscale", input_img.cols / 2, input_img.rows / 2},
-        {"Test3_AspectRatioChange", input_img.cols * 3 / 4, input_img.rows * 5 / 4}
-    };
+    vector<TestCase> test_cases = {{"Test1_Upscale", input_img.cols * 2, input_img.rows * 2},
+                                   {"Test2_Downscale", input_img.cols / 2, input_img.rows / 2},
+                                   {"Test3_AspectRatioChange", input_img.cols * 3 / 4, input_img.rows * 5 / 4}};
 
     // 测试次数以获得平均值
     int test_iterations = 10;
 
     // 循环测试不同的缩放因子
-    for (const auto& test : test_cases) {
+    for (const auto &test : test_cases) {
         cout << "\n=== " << test.name << " ===" << endl;
         cout << "输出尺寸: " << test.output_width << "x" << test.output_height << endl;
 
