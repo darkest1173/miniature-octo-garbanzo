@@ -1,0 +1,24 @@
+clang++ Nearest_Neighbor_Interpolation.cpp -o nearest_neighbor_basic -std=c++11 `pkg-config --cflags --libs opencv4`
+clang++ Bilinear_Interpolation.cpp -o bilinear_interpolation_basic -std=c++11 `pkg-config --cflags --libs opencv4`
+clang++ Multithreading_and_Optimization.cpp -o multithreading_and_optimization -std=c++11 `pkg-config --cflags --libs opencv4`
+clang++ Comparison_and_Analysis.cpp -o comparison_and_analysis -std=c++11 `pkg-config --cflags --libs opencv4`
+clang++ -std=c++17 comparison_and_analysis_with_ffmpeg.cpp \
+    -I/usr/local/include \
+    -I/usr/local/include/opencv4 \
+    $(pkg-config --cflags --libs opencv4) \
+    $(pkg-config --cflags --libs libavcodec libavformat libswscale libavutil) \
+    -o image_resize_compare
+clang++ -O3 -std=c++17 comparison_and_analysis_with_ffmpeg.cpp \
+    -I/usr/local/include \
+    -I/usr/local/include/opencv4 \
+    $(pkg-config --cflags --libs opencv4) \
+    $(pkg-config --cflags --libs libavcodec libavformat libswscale libavutil) \
+    -o image_resize_compare
+clang++ -std=c++11 -O3 -march=native -mavx2 -mfma \
+    -Xpreprocessor -fopenmp \
+    -lomp \
+    Bilinear_Interpolation_SIMD.cpp \
+    -o resize_simd \
+    $(pkg-config --cflags --libs opencv4)
+
+./image_resize_compare input_image.jpg resized_image_basic.jpg 800 600
