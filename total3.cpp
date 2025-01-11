@@ -6,121 +6,121 @@ using namespace std;
 using namespace cv;
 
 // 计算缩放因子
-void calculateScalingFactors(int input_width, int input_height, int output_width, int output_height,
-                             double &scale_width, double &scale_height) {
-    scale_width = static_cast<double>(input_width) / output_width;
-    scale_height = static_cast<double>(input_height) / output_height;
+void calculateScalingFactors(int src_width, int src_height, int dst_width, int dst_height,
+                             double &width_scale, double &height_scale) {
+    width_scale = static_cast<double>(src_width) / dst_width;
+    height_scale = static_cast<double>(src_height) / dst_height;
 }
 
 // 最近邻插值源坐标
-inline pair<int, int> getNearestNeighborCoordinates(int x_dst, int y_dst, double scale_width, double scale_height) {
-    int x_src = static_cast<int>(x_dst * scale_width + 0.5);
-    int y_src = static_cast<int>(y_dst * scale_height + 0.5);
+inline pair<int, int> getNearestNeighborCoordinates(int x_dst, int y_dst, double width_scale, double height_scale) {
+    int x_src = static_cast<int>(x_dst * width_scale + 0.5);
+    int y_src = static_cast<int>(y_dst * height_scale + 0.5);
     return {x_src, y_src};
 }
 
 // 限制坐标在有效范围内
-inline pair<int, int> clampCoordinates(int x_src, int y_src, int input_width, int input_height) {
-    x_src = min(max(x_src, 0), input_width - 1);
-    y_src = min(max(y_src, 0), input_height - 1);
+inline pair<int, int> clampCoordinates(int x_src, int y_src, int src_width, int src_height) {
+    x_src = min(max(x_src, 0), src_width - 1);
+    y_src = min(max(y_src, 0), src_height - 1);
     return {x_src, y_src};
 }
 
 // 多数据类型支持的像素赋值函数
 template <typename T>
-inline void assignPixel(const Mat &input_image, Mat &output_image, int x_dst, int y_dst, int x_src, int y_src) {
-    int channels = input_image.channels();
+inline void assignPixel(const Mat &src_image, Mat &dst_image, int x_dst, int y_dst, int x_src, int y_src) {
+    int channels = src_image.channels();
     if (channels == 1) {
-        output_image.at<T>(y_dst, x_dst) = input_image.at<T>(y_src, x_src);
+        dst_image.at<T>(y_dst, x_dst) = src_image.at<T>(y_src, x_src);
     } else if (channels == 3) {
-        Vec<T, 3> pixel = input_image.at<Vec<T, 3>>(y_src, x_src);
-        output_image.at<Vec<T, 3>>(y_dst, x_dst) = pixel;
+        Vec<T, 3> pixel = src_image.at<Vec<T, 3>>(y_src, x_src);
+        dst_image.at<Vec<T, 3>>(y_dst, x_dst) = pixel;
     }
 }
 
 // 最近邻插值缩放（多线程，多数据类型）
 template <typename T>
-Mat nearestNeighborResizeParallel(const Mat &input_image, int output_width, int output_height) {
-    int input_width = input_image.cols;
-    int input_height = input_image.rows;
+Mat nearestNeighborResizeParallel(const Mat &src_image, int dst_width, int dst_height) {
+    int src_width = src_image.cols;
+    int src_height = src_image.rows;
 
-    double scale_width, scale_height;
-    calculateScalingFactors(input_width, input_height, output_width, output_height, scale_width, scale_height);
+    double width_scale, height_scale;
+    calculateScalingFactors(src_width, src_height, dst_width, dst_height, width_scale, height_scale);
 
-    Mat output_image(output_height, output_width, input_image.type());
+    Mat dst_image(dst_height, dst_width, src_image.type());
 
-    parallel_for_(Range(0, output_height), [&](const Range &range) {
+    parallel_for_(Range(0, dst_height), [&](const Range &range) {
         for (int y_dst = range.start; y_dst < range.end; ++y_dst) {
-            int y_src = static_cast<int>(y_dst * scale_height + 0.5);
-            y_src = min(max(y_src, 0), input_height - 1);
+            int y_src = static_cast<int>(y_dst * height_scale + 0.5);
+            y_src = min(max(y_src, 0), src_height - 1);
 
-            T *output_row = output_image.ptr<T>(y_dst);
-            for (int x_dst = 0; x_dst < output_width; ++x_dst) {
-                int x_src = static_cast<int>(x_dst * scale_width + 0.5);
-                x_src = min(max(x_src, 0), input_width - 1);
+            T *output_row = dst_image.ptr<T>(y_dst);
+            for (int x_dst = 0; x_dst < dst_width; ++x_dst) {
+                int x_src = static_cast<int>(x_dst * width_scale + 0.5);
+                x_src = min(max(x_src, 0), src_width - 1);
 
-                if (input_image.channels() == 1) {
-                    output_row[x_dst] = input_image.at<T>(y_src, x_src);
-                } else if (input_image.channels() == 3) {
-                    Vec<T, 3> pixel = input_image.at<Vec<T, 3>>(y_src, x_src);
-                    output_image.at<Vec<T, 3>>(y_dst, x_dst) = pixel;
+                if (src_image.channels() == 1) {
+                    output_row[x_dst] = src_image.at<T>(y_src, x_src);
+                } else if (src_image.channels() == 3) {
+                    Vec<T, 3> pixel = src_image.at<Vec<T, 3>>(y_src, x_src);
+                    dst_image.at<Vec<T, 3>>(y_dst, x_dst) = pixel;
                 }
             }
         }
     });
 
-    return output_image;
+    return dst_image;
 }
 
 // 双线性插值缩放（多线程，多数据类型）
 template <typename T>
-Mat bilinearResizeParallel(const Mat &input_image, int output_width, int output_height) {
-    int input_width = input_image.cols;
-    int input_height = input_image.rows;
+Mat bilinearResizeParallel(const Mat &src_image, int dst_width, int dst_height) {
+    int src_width = src_image.cols;
+    int src_height = src_image.rows;
 
-    double scale_width = static_cast<double>(input_width) / output_width;
-    double scale_height = static_cast<double>(input_height) / output_height;
+    double width_scale = static_cast<double>(src_width) / dst_width;
+    double height_scale = static_cast<double>(src_height) / dst_height;
 
-    Mat output_image(output_height, output_width, input_image.type());
+    Mat dst_image(dst_height, dst_width, src_image.type());
 
-    parallel_for_(Range(0, output_height), [&](const Range &range) {
+    parallel_for_(Range(0, dst_height), [&](const Range &range) {
         for (int y_dst = range.start; y_dst < range.end; ++y_dst) {
-            double y_src = (y_dst + 0.5) * scale_height - 0.5;
+            double y_src = (y_dst + 0.5) * height_scale - 0.5;
             int y0 = static_cast<int>(floor(y_src));
             int y1 = y0 + 1;
             double y_lerp = y_src - y0;
 
-            y0 = min(max(y0, 0), input_height - 1);
-            y1 = min(max(y1, 0), input_height - 1);
+            y0 = min(max(y0, 0), src_height - 1);
+            y1 = min(max(y1, 0), src_height - 1);
 
-            for (int x_dst = 0; x_dst < output_width; ++x_dst) {
-                double x_src = (x_dst + 0.5) * scale_width - 0.5;
+            for (int x_dst = 0; x_dst < dst_width; ++x_dst) {
+                double x_src = (x_dst + 0.5) * width_scale - 0.5;
                 int x0 = static_cast<int>(floor(x_src));
                 int x1 = x0 + 1;
                 double x_lerp = x_src - x0;
 
-                x0 = min(max(x0, 0), input_width - 1);
-                x1 = min(max(x1, 0), input_width - 1);
+                x0 = min(max(x0, 0), src_width - 1);
+                x1 = min(max(x1, 0), src_width - 1);
 
-                if (input_image.channels() == 1) {
-                    T p00 = input_image.at<T>(y0, x0);
-                    T p01 = input_image.at<T>(y0, x1);
-                    T p10 = input_image.at<T>(y1, x0);
-                    T p11 = input_image.at<T>(y1, x1);
+                if (src_image.channels() == 1) {
+                    T p00 = src_image.at<T>(y0, x0);
+                    T p01 = src_image.at<T>(y0, x1);
+                    T p10 = src_image.at<T>(y1, x0);
+                    T p11 = src_image.at<T>(y1, x1);
 
                     double value = (1 - y_lerp) * ((1 - x_lerp) * p00 + x_lerp * p01) +
                                    y_lerp * ((1 - x_lerp) * p10 + x_lerp * p11);
 
                     if (std::is_same<T, uchar>::value || std::is_same<T, uint16_t>::value) {
-                        output_image.at<T>(y_dst, x_dst) = static_cast<T>(round(value));
+                        dst_image.at<T>(y_dst, x_dst) = static_cast<T>(round(value));
                     } else {
-                        output_image.at<T>(y_dst, x_dst) = static_cast<T>(value);
+                        dst_image.at<T>(y_dst, x_dst) = static_cast<T>(value);
                     }
-                } else if (input_image.channels() == 3) {
-                    Vec<T, 3> p00 = input_image.at<Vec<T, 3>>(y0, x0);
-                    Vec<T, 3> p01 = input_image.at<Vec<T, 3>>(y0, x1);
-                    Vec<T, 3> p10 = input_image.at<Vec<T, 3>>(y1, x0);
-                    Vec<T, 3> p11 = input_image.at<Vec<T, 3>>(y1, x1);
+                } else if (src_image.channels() == 3) {
+                    Vec<T, 3> p00 = src_image.at<Vec<T, 3>>(y0, x0);
+                    Vec<T, 3> p01 = src_image.at<Vec<T, 3>>(y0, x1);
+                    Vec<T, 3> p10 = src_image.at<Vec<T, 3>>(y1, x0);
+                    Vec<T, 3> p11 = src_image.at<Vec<T, 3>>(y1, x1);
 
                     Vec<double, 3> value;
                     for (int c = 0; c < 3; ++c) {
@@ -128,9 +128,9 @@ Mat bilinearResizeParallel(const Mat &input_image, int output_width, int output_
                                    y_lerp * ((1 - x_lerp) * p10[c] + x_lerp * p11[c]);
 
                         if (std::is_same<T, uchar>::value || std::is_same<T, uint16_t>::value) {
-                            output_image.at<Vec<T, 3>>(y_dst, x_dst)[c] = static_cast<T>(round(value[c]));
+                            dst_image.at<Vec<T, 3>>(y_dst, x_dst)[c] = static_cast<T>(round(value[c]));
                         } else {
-                            output_image.at<Vec<T, 3>>(y_dst, x_dst)[c] = static_cast<T>(value[c]);
+                            dst_image.at<Vec<T, 3>>(y_dst, x_dst)[c] = static_cast<T>(value[c]);
                         }
                     }
                 }
@@ -138,7 +138,7 @@ Mat bilinearResizeParallel(const Mat &input_image, int output_width, int output_
         }
     });
 
-    return output_image;
+    return dst_image;
 }
 
 // 使用 Universal Intrinsics 的最近邻插值 SIMD 加速
